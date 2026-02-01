@@ -46,6 +46,7 @@ static bool FileExists(const std::string &path)
 
 static int WriteRootInfo(const std::string &path, const HcclRootInfo &info)
 {
+    std::cout << "Writing rootInfo to " << path << std::endl;
     std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
     if (!ofs.good()) {
         std::cerr << "Failed to open rootInfo file for write: " << path << std::endl;
@@ -72,6 +73,7 @@ static int ReadRootInfo(const std::string &path, HcclRootInfo &info, int timeout
         waitedMs += sleepMs;
     }
 
+    std::cout << "Found rootInfo file: " << path << ", reading..." << std::endl;
     std::ifstream ifs(path, std::ios::binary);
     if (!ifs.good()) {
         std::cerr << "Failed to open rootInfo file for read: " << path << std::endl;
@@ -154,6 +156,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    std::cout << "rank=" << opt.rank << " device=" << opt.device << " world=" << opt.world
+              << " bytes=" << opt.bytes << std::endl;
     ACLCHECK(aclInit(nullptr));
     ACLCHECK(aclrtSetDevice(opt.device));
     aclrtStream stream;
@@ -173,8 +177,10 @@ int main(int argc, char **argv)
         std::cout << "Rank1 read rootInfo from " << opt.rootInfoPath << std::endl;
     }
 
+    std::cout << "rank=" << opt.rank << " before HcclCommInitRootInfo" << std::endl;
     HcclComm comm;
     HCCLCHECK(HcclCommInitRootInfo(opt.world, &rootInfo, opt.rank, &comm));
+    std::cout << "rank=" << opt.rank << " after HcclCommInitRootInfo" << std::endl;
 
     const uint64_t count = opt.bytes / sizeof(float);
     const uint64_t bytes = count * sizeof(float);
@@ -189,16 +195,19 @@ int main(int argc, char **argv)
     }
 
     for (int i = 0; i < opt.warmup; ++i) {
+        std::cout << "rank=" << opt.rank << " warmup iter=" << i << " before Send/Recv" << std::endl;
         if (opt.rank == 0) {
             HCCLCHECK(HcclSend(devBuf, count, HCCL_DATA_TYPE_FP32, 1, comm, stream));
         } else {
             HCCLCHECK(HcclRecv(devBuf, count, HCCL_DATA_TYPE_FP32, 0, comm, stream));
         }
         ACLCHECK(aclrtSynchronizeStream(stream));
+        std::cout << "rank=" << opt.rank << " warmup iter=" << i << " after Send/Recv" << std::endl;
     }
 
     double totalMs = 0.0;
     for (int i = 0; i < opt.iters; ++i) {
+        std::cout << "rank=" << opt.rank << " iter=" << i << " before Send/Recv" << std::endl;
         auto t0 = std::chrono::high_resolution_clock::now();
         if (opt.rank == 0) {
             HCCLCHECK(HcclSend(devBuf, count, HCCL_DATA_TYPE_FP32, 1, comm, stream));
@@ -208,6 +217,7 @@ int main(int argc, char **argv)
         ACLCHECK(aclrtSynchronizeStream(stream));
         auto t1 = std::chrono::high_resolution_clock::now();
         totalMs += std::chrono::duration<double, std::milli>(t1 - t0).count();
+        std::cout << "rank=" << opt.rank << " iter=" << i << " after Send/Recv" << std::endl;
     }
 
     const double avgMs = totalMs / opt.iters;
