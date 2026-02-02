@@ -58,9 +58,19 @@ def main():
         _ = s.recv(128)
 
     print("[B] registered addr sent to A, waiting for transfer...")
-    time.sleep(5)
-    torch.npu.synchronize()
-    print(f"[B] first_row_head={tensor[0, :8].cpu().tolist()}")
+    # Poll until the first element becomes 1.0 or timeout
+    timeout_s = 120
+    start = time.time()
+    while True:
+        torch.npu.synchronize()
+        head = tensor[0, :8].cpu()
+        if head[0].item() == 1.0:
+            print(f"[B] first_row_head={head.tolist()}")
+            break
+        if time.time() - start > timeout_s:
+            print("[B] timeout waiting for data, first_row_head=", head.tolist())
+            break
+        time.sleep(1)
 
     while True:
         time.sleep(10)

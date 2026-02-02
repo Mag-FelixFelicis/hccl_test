@@ -75,10 +75,14 @@ def main():
                         conn.sendall(b"ERR no B addr\n")
                         continue
                     print("[A] send command received, start D2D transfer")
-                    engine.transfer_sync_write(args.peer_id, tensor.data_ptr(), b_addr, total_bytes)
+                    ret = engine.transfer_sync_write(args.peer_id, tensor.data_ptr(), b_addr, total_bytes)
                     torch.npu.synchronize()
-                    print("[A] transfer done")
-                    conn.sendall(b"OK\n")
+                    if ret != 0:
+                        print(f"[A] transfer failed ret={ret}")
+                        conn.sendall(f"ERR ret={ret}\n".encode("utf-8"))
+                    else:
+                        print("[A] transfer done")
+                        conn.sendall(b"OK\n")
                 else:
                     conn.sendall(b"ERR unknown\n")
 
