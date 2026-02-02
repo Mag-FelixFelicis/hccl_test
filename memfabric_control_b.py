@@ -33,7 +33,14 @@ def main():
     set_conf_store_tls(False, "")
 
     engine = TransferEngine()
-    ret = engine.initialize(args.store_url, args.my_id, "Receiver", args.npu_id)
+    # TransferEngine expects role "Prefill" or "Decode"
+    ret = engine.initialize(
+        args.store_url,
+        args.my_id,
+        "Decode",
+        args.npu_id,
+        TransferEngine.TransDataOpType.DEVICE_RDMA,
+    )
     if ret != 0:
         raise RuntimeError("TransferEngine initialize failed")
 

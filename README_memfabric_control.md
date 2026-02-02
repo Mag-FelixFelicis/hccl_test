@@ -66,10 +66,12 @@ python3 memfabric_control_c.py --ip 192.168.201.14 --port 9000 --cmd SEND
 ## 预期输出
 
 进程A：
+- 以 Prefill 角色初始化 TransferEngine
 - 打印显存地址与第一行
 - 收到 C 指令后执行 D2D 传输
 
 进程B：
+- 以 Decode 角色初始化 TransferEngine
 - 打印显存地址
 - 传输完成后打印第一行（应为 1..）
 
@@ -78,3 +80,5 @@ python3 memfabric_control_c.py --ip 192.168.201.14 --port 9000 --cmd SEND
 - 进程B将自己的显存地址通过 TCP 发给进程A（A 作为控制面）
 - 进程C只是触发 A 进行传输
 - 这是“穿刺原型”，用于验证传输与指令流程
+
+- NOTE: this sample uses DEVICE_RDMA; ensure A2 device RDMA is enabled and device network is reachable.

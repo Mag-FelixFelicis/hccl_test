@@ -36,7 +36,14 @@ def main():
     time.sleep(2)
 
     engine = TransferEngine()
-    ret = engine.initialize(args.store_url, args.my_id, "Sender", args.npu_id)
+    # TransferEngine expects role "Prefill" or "Decode"
+    ret = engine.initialize(
+        args.store_url,
+        args.my_id,
+        "Prefill",
+        args.npu_id,
+        TransferEngine.TransDataOpType.DEVICE_RDMA,
+    )
     if ret != 0:
         raise RuntimeError("TransferEngine initialize failed")
 
