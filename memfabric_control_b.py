@@ -18,6 +18,8 @@ def parse_args():
     p.add_argument("--bytes", type=int, default=1 << 30)
     p.add_argument("--notify-ip", required=True, help="A control server ip")
     p.add_argument("--notify-port", type=int, default=9000)
+    p.add_argument("--listen-ip", default="0.0.0.0")
+    p.add_argument("--listen-port", type=int, default=9001)
     p.add_argument("--log-level", type=int, default=1, choices=[0, 1, 2, 3])
     return p.parse_args()
 
@@ -57,29 +59,26 @@ def main():
         s.sendall(f"REG {hex(tensor.data_ptr())}\n".encode("utf-8"))
         _ = s.recv(128)
 
-    print("[B] registered addr sent to A, waiting for transfer...")
-    # Poll until the first element becomes 1.0 or timeout
-    timeout_s = 120
-    start = time.time()
-    while True:
-        torch.npu.synchronize()
-        head = tensor[0, :8].cpu()
-        if head[0].item() == 1.0:
+    print("[B] registered addr sent to A, waiting for DONE notify...")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((args.listen_ip, args.listen_port))
+        s.listen(5)
+        idx = 0
+        while True:
+            start = time.time()
+            conn, _ = s.accept()
+            with conn:
+                _ = conn.recv(64)
             elapsed_ms = (time.time() - start) * 1000.0
-            # verify tail to confirm full size
+            torch.npu.synchronize()
+            head = tensor[0, :8].cpu()
             tail = tensor.view(-1)[-8:].cpu()
             ok_tail = (tail[0].item() == (tensor.numel() - 7))
-            print(f"[B] first_row_head={head.tolist()}")
-            print(f"[B] last_row_tail={tail.tolist()} tail_ok={ok_tail}")
-            print(f"[B] recv_bytes={total_bytes} recv_time_ms={elapsed_ms:.3f}")
-            break
-        if time.time() - start > timeout_s:
-            print("[B] timeout waiting for data, first_row_head=", head.tolist())
-            break
-        time.sleep(1)
-
-    while True:
-        time.sleep(10)
+            print(f"[B] recv#{idx} first_row_head={head.tolist()}")
+            print(f"[B] recv#{idx} last_row_tail={tail.tolist()} tail_ok={ok_tail}")
+            print(f"[B] recv#{idx} bytes={total_bytes} recv_time_ms={elapsed_ms:.3f}")
+            idx += 1
 
 
 if __name__ == "__main__":

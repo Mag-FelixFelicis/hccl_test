@@ -43,6 +43,7 @@ python3 memfabric_control_a.py \
   --peer-id 192.168.201.15:10001 \
   --npu-id 0 \
   --listen-ip 0.0.0.0 --listen-port 9000 \
+  --b-notify-ip 192.168.201.15 --b-notify-port 9001 \
   --bytes 1073741824
 ```
 
@@ -54,6 +55,7 @@ python3 memfabric_control_b.py \
   --my-id 192.168.201.15:10001 \
   --npu-id 0 \
   --notify-ip 192.168.201.14 --notify-port 9000 \
+  --listen-ip 0.0.0.0 --listen-port 9001 \
   --bytes 1073741824
 ```
 

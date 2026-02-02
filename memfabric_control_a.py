@@ -18,6 +18,8 @@ def parse_args():
     p.add_argument("--npu-id", type=int, default=0)
     p.add_argument("--listen-ip", default="0.0.0.0")
     p.add_argument("--listen-port", type=int, default=9000)
+    p.add_argument("--b-notify-ip", required=True, help="B control ip for DONE notify")
+    p.add_argument("--b-notify-port", type=int, default=9001)
     p.add_argument("--bytes", type=int, default=1 << 30)
     p.add_argument("--log-level", type=int, default=1, choices=[0, 1, 2, 3])
     return p.parse_args()
@@ -89,6 +91,13 @@ def main():
                         gibps = gib / (ms / 1000.0)
                         gbps = gb / (ms / 1000.0)
                         print(f"[A] transfer done avg_ms={ms:.3f} throughput={gibps:.2f} GiB/s ({gbps:.2f} GB/s)")
+                        # notify B that transfer finished
+                        try:
+                            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as nb:
+                                nb.connect((args.b_notify_ip, args.b_notify_port))
+                                nb.sendall(b"DONE\n")
+                        except Exception as e:
+                            print(f"[A] notify B failed: {e}")
                         conn.sendall(b"OK\n")
                 else:
                     conn.sendall(b"ERR unknown\n")
