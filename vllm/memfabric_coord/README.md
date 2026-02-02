@@ -53,6 +53,11 @@ python3 ../demo_memfabric_safetensor.py \
   --node-ip 192.168.201.15 \
   --safetensor-path /tmp/demo_tensor.safetensors
 
+Note:
+- The demo script will start the config store ONLY on the source role.
+- The receiver will not start a local store server and will only connect to the
+  existing store on the source node.
+
 vLLM startup (all pods use the same args)
 ----------------------------------------
 Example extra config JSON:

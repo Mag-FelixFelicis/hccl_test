@@ -50,7 +50,14 @@ def get_rank() -> int:
     return 0
 
 
-def init_engine(store_url: str, my_id: str, role: str, npu_id: int, log_level: int):
+def init_engine(
+    store_url: str,
+    my_id: str,
+    role: str,
+    npu_id: int,
+    log_level: int,
+    create_store: bool,
+):
     from memfabric_hybrid import (
         TransferEngine,
         create_config_store,
@@ -60,8 +67,9 @@ def init_engine(store_url: str, my_id: str, role: str, npu_id: int, log_level: i
 
     set_log_level(log_level)
     set_conf_store_tls(False, "")
-    create_config_store(store_url)
-    time.sleep(1)
+    if create_store:
+        create_config_store(store_url)
+        time.sleep(1)
     engine = TransferEngine()
     ret = engine.initialize(
         store_url, my_id, role, npu_id, TransferEngine.TransDataOpType.DEVICE_RDMA
@@ -112,7 +120,14 @@ def main():
         role = "source"
 
     engine_role = "Prefill" if role == "source" else "Decode"
-    engine = init_engine(args.store_url, my_id, engine_role, args.npu_id, args.log_level)
+    engine = init_engine(
+        args.store_url,
+        my_id,
+        engine_role,
+        args.npu_id,
+        args.log_level,
+        create_store=(role == "source"),
+    )
 
     if role == "source":
         try:
