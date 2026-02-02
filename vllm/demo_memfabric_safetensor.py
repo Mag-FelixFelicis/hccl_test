@@ -98,7 +98,7 @@ def main():
     p.add_argument("--log-level", type=int, default=1)
     p.add_argument("--poll-interval-s", type=float, default=2)
     p.add_argument("--poll-timeout-s", type=int, default=1800)
-    p.add_argument("--transfer-wait-s", type=float, default=5.0)
+    p.add_argument("--transfer-wait-s", type=float, default=0.0)
     p.add_argument("--transfer-retries", type=int, default=5)
     p.add_argument("--my-id", default=None)
     args = p.parse_args()
@@ -203,26 +203,35 @@ def main():
                 dst_addr = int(dst_params["demo"]["addr"])
                 t2 = time.perf_counter()
                 last_ret = 0
+                attempts = 0
+                xfer_ms = None
                 for attempt in range(args.transfer_retries + 1):
+                    attempts = attempt + 1
                     if args.transfer_wait_s > 0:
                         time.sleep(args.transfer_wait_s)
+                    t2 = time.perf_counter()
                     ret = engine.transfer_sync_write(
                         peer_id, npu_tensor.data_ptr(), dst_addr, bytes_size
                     )
                     torch.npu.synchronize()
+                    t3 = time.perf_counter()
                     if ret == 0:
                         last_ret = 0
+                        xfer_ms = (t3 - t2) * 1000.0
                         break
                     last_ret = ret
                     print(
                         f"[source] transfer attempt {attempt} failed ret={ret}, retry..."
                     )
-                t3 = time.perf_counter()
                 if last_ret != 0:
                     raise RuntimeError(f"transfer failed ret={last_ret}")
-                ms = (t3 - t2) * 1000.0
-                gibps = gib / ((t3 - t2) if (t3 - t2) > 0 else 1e-6)
-                print(f"[source] transfer ms={ms:.3f} throughput={gibps:.2f} GiB/s")
+                if xfer_ms is None:
+                    xfer_ms = 0.0
+                gibps = gib / ((xfer_ms / 1000.0) if xfer_ms > 0 else 1e-6)
+                wait_ms = args.transfer_wait_s * attempts * 1000.0
+                print(
+                    f"[source] transfer ms={xfer_ms:.3f} wait_ms={wait_ms:.1f} throughput={gibps:.2f} GiB/s"
+                )
                 if task.get("transfer_id"):
                     http_post_json(
                         f"{args.coordinator_url}/v1/registry/complete",

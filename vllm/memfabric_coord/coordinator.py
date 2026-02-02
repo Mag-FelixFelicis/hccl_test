@@ -28,18 +28,18 @@ def _rank_key(rank_info: dict) -> str:
 
 def _get_model_state(key: str) -> dict[str, Any]:
     models = STATE["models"]
-        if key not in models:
-            models[key] = {
-                "sources": {},
-                "receivers": {},
-                "pending": {},
-                "assignments": {},
-                "source_assignments": {},
-                "transfer_status": {},
-                "receiver_transfers": {},
-                "ready_sources": set(),
-                "ready_receivers": set(),
-            }
+    if key not in models:
+        models[key] = {
+            "sources": {},
+            "receivers": {},
+            "pending": {},
+            "assignments": {},
+            "source_assignments": {},
+            "transfer_status": {},
+            "receiver_transfers": {},
+            "ready_sources": set(),
+            "ready_receivers": set(),
+        }
     return models[key]
 
 

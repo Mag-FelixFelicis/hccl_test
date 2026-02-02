@@ -63,6 +63,8 @@ Note:
   override with --my-id if needed.
 - If you see ret=-2000 session not found, increase --transfer-wait-s and
   --transfer-retries on the source node.
+- transfer ms printed by source is pure transfer time (wait_ms is shown
+  separately).
 
 vLLM startup (all pods use the same args)
 ----------------------------------------
