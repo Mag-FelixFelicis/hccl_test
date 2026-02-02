@@ -65,7 +65,13 @@ def main():
         torch.npu.synchronize()
         head = tensor[0, :8].cpu()
         if head[0].item() == 1.0:
+            elapsed_ms = (time.time() - start) * 1000.0
+            # verify tail to confirm full size
+            tail = tensor.view(-1)[-8:].cpu()
+            ok_tail = (tail[0].item() == (tensor.numel() - 7))
             print(f"[B] first_row_head={head.tolist()}")
+            print(f"[B] last_row_tail={tail.tolist()} tail_ok={ok_tail}")
+            print(f"[B] recv_bytes={total_bytes} recv_time_ms={elapsed_ms:.3f}")
             break
         if time.time() - start > timeout_s:
             print("[B] timeout waiting for data, first_row_head=", head.tolist())

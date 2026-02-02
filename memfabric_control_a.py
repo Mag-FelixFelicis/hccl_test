@@ -75,13 +75,20 @@ def main():
                         conn.sendall(b"ERR no B addr\n")
                         continue
                     print("[A] send command received, start D2D transfer")
+                    t0 = time.time()
                     ret = engine.transfer_sync_write(args.peer_id, tensor.data_ptr(), b_addr, total_bytes)
                     torch.npu.synchronize()
+                    t1 = time.time()
                     if ret != 0:
                         print(f"[A] transfer failed ret={ret}")
                         conn.sendall(f"ERR ret={ret}\n".encode("utf-8"))
                     else:
-                        print("[A] transfer done")
+                        ms = (t1 - t0) * 1000.0
+                        gib = total_bytes / (1024.0 * 1024.0 * 1024.0)
+                        gb = total_bytes / 1e9
+                        gibps = gib / (ms / 1000.0)
+                        gbps = gb / (ms / 1000.0)
+                        print(f"[A] transfer done avg_ms={ms:.3f} throughput={gibps:.2f} GiB/s ({gbps:.2f} GB/s)")
                         conn.sendall(b"OK\n")
                 else:
                     conn.sendall(b"ERR unknown\n")
