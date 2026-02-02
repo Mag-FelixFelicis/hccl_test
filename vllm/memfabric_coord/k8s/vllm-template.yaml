@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-ascend-memfabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-ascend-memfabric
+  template:
+    metadata:
+      labels:
+        app: vllm-ascend-memfabric
+    spec:
+      containers:
+        - name: vllm
+          image: vllm-ascend:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: COORDINATOR_URL
+              value: "http://memfabric-coordinator:8080"
+            - name: STORE_URL
+              value: "tcp://memfabric-coordinator:8570"
+          command: ["/bin/bash", "-lc"]
+          args:
+            - >
+              vllm serve /path/to/model
+              --tensor-parallel-size 2
+              --pipeline-parallel-size 1
+              --load-format memfabric_http
+              --model-loader-extra-config
+              '{"coordinator_url":"'"$COORDINATOR_URL"'","store_url":"'"$STORE_URL"'","node_ip":"'"$POD_IP"'","base_port":10000,"poll_interval_s":2,"poll_timeout_s":1800,"log_level":1}'
+          ports:
+            - containerPort: 8000
