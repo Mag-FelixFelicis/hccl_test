@@ -28,16 +28,18 @@ def _rank_key(rank_info: dict) -> str:
 
 def _get_model_state(key: str) -> dict[str, Any]:
     models = STATE["models"]
-    if key not in models:
-        models[key] = {
-            "sources": {},
-            "receivers": {},
-            "pending": {},
-            "assignments": {},
-            "source_assignments": {},
-            "transfer_status": {},
-            "receiver_transfers": {},
-        }
+        if key not in models:
+            models[key] = {
+                "sources": {},
+                "receivers": {},
+                "pending": {},
+                "assignments": {},
+                "source_assignments": {},
+                "transfer_status": {},
+                "receiver_transfers": {},
+                "ready_sources": set(),
+                "ready_receivers": set(),
+            }
     return models[key]
 
 
@@ -61,6 +63,16 @@ def _params_to_map(params: list[dict]) -> dict[str, dict[str, Any]]:
 
 
 def _maybe_create_tasks(model_state: dict, rank_key: str):
+    # only dispatch when both sides are ready
+    source_ready = any(
+        key.startswith(f"{rank_key}|") for key in model_state.get("ready_sources", set())
+    )
+    receiver_ready = any(
+        key.startswith(f"{rank_key}|")
+        for key in model_state.get("ready_receivers", set())
+    )
+    if not (source_ready and receiver_ready):
+        return
     source = model_state["sources"].get(rank_key)
     if not source:
         return
@@ -114,6 +126,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/v1/registry/register":
             self._handle_register()
+            return
+        if self.path == "/v1/registry/ready":
+            self._handle_ready()
             return
         if self.path == "/v1/registry/poll":
             self._handle_poll()
@@ -190,6 +205,38 @@ class Handler(BaseHTTPRequestHandler):
                 _maybe_create_tasks(state, rank_key)
 
         self._send_json(200, {"status": "ok", "role": role})
+
+    def _handle_ready(self):
+        req = self._read_json()
+        model_key = req.get("model_key", {})
+        my_id = req.get("my_id")
+        role = req.get("role")
+        rank_info = req.get("rank_info", {})
+        if not my_id:
+            self._send_json(400, {"error": "missing my_id"})
+            return
+        key = _model_key_str(model_key)
+        rank_key = _rank_key(rank_info)
+        with LOCK:
+            state = _get_model_state(key)
+            if role is None:
+                role = state["assignments"].get(my_id)
+            if role == "source":
+                state["ready_sources"].add(f"{rank_key}|{my_id}")
+            else:
+                state["ready_receivers"].add(f"{rank_key}|{my_id}")
+            # only create tasks if both sides are ready
+            if role in ("source", "receiver"):
+                source_ready = any(
+                    key.startswith(f"{rank_key}|") for key in state["ready_sources"]
+                )
+                receiver_ready = any(
+                    key.startswith(f"{rank_key}|")
+                    for key in state["ready_receivers"]
+                )
+                if source_ready and receiver_ready:
+                    _maybe_create_tasks(state, rank_key)
+        self._send_json(200, {"status": "ok"})
 
     def _handle_poll(self):
         req = self._read_json()

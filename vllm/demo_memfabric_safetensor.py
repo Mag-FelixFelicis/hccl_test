@@ -98,11 +98,17 @@ def main():
     p.add_argument("--log-level", type=int, default=1)
     p.add_argument("--poll-interval-s", type=float, default=2)
     p.add_argument("--poll-timeout-s", type=int, default=1800)
+    p.add_argument("--transfer-wait-s", type=float, default=5.0)
+    p.add_argument("--transfer-retries", type=int, default=5)
+    p.add_argument("--my-id", default=None)
     args = p.parse_args()
 
     node_ip = resolve_node_ip(args.node_ip)
     rank = get_rank()
-    my_id = f"{node_ip}:{args.base_port + rank}"
+    if args.my_id:
+        my_id = args.my_id
+    else:
+        my_id = f"{node_ip}:{args.base_port + rank}"
     shape = (args.rows, args.cols)
     dtype = getattr(torch, args.dtype)
 
@@ -177,6 +183,10 @@ def main():
             "metrics": {"disk_to_npu_ms": load_ms, "disk_to_npu_gibps": gibps},
         }
         http_post_json(f"{args.coordinator_url}/v1/registry/register", payload)
+        http_post_json(
+            f"{args.coordinator_url}/v1/registry/ready",
+            {"model_key": model_key, "my_id": my_id, "role": "source", "rank_info": {"rank": rank}},
+        )
 
         print("[source] waiting for receiver tasks...")
         start = time.time()
@@ -192,11 +202,24 @@ def main():
                     continue
                 dst_addr = int(dst_params["demo"]["addr"])
                 t2 = time.perf_counter()
-                ret = engine.transfer_sync_write(peer_id, npu_tensor.data_ptr(), dst_addr, bytes_size)
-                torch.npu.synchronize()
+                last_ret = 0
+                for attempt in range(args.transfer_retries + 1):
+                    if args.transfer_wait_s > 0:
+                        time.sleep(args.transfer_wait_s)
+                    ret = engine.transfer_sync_write(
+                        peer_id, npu_tensor.data_ptr(), dst_addr, bytes_size
+                    )
+                    torch.npu.synchronize()
+                    if ret == 0:
+                        last_ret = 0
+                        break
+                    last_ret = ret
+                    print(
+                        f"[source] transfer attempt {attempt} failed ret={ret}, retry..."
+                    )
                 t3 = time.perf_counter()
-                if ret != 0:
-                    raise RuntimeError(f"transfer failed ret={ret}")
+                if last_ret != 0:
+                    raise RuntimeError(f"transfer failed ret={last_ret}")
                 ms = (t3 - t2) * 1000.0
                 gibps = gib / ((t3 - t2) if (t3 - t2) > 0 else 1e-6)
                 print(f"[source] transfer ms={ms:.3f} throughput={gibps:.2f} GiB/s")
@@ -232,6 +255,10 @@ def main():
             ],
         }
         http_post_json(f"{args.coordinator_url}/v1/registry/register", payload)
+        http_post_json(
+            f"{args.coordinator_url}/v1/registry/ready",
+            {"model_key": model_key, "my_id": my_id, "role": "receiver", "rank_info": {"rank": rank}},
+        )
 
         print("[receiver] waiting for transfer...")
         start = time.perf_counter()

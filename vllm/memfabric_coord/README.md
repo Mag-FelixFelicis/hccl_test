@@ -57,6 +57,12 @@ Note:
 - The demo script will start the config store ONLY on the source role.
 - The receiver will not start a local store server and will only connect to the
   existing store on the source node.
+- The demo now uses a READY handshake; tasks will be dispatched only after both
+  source and receiver report ready.
+- my_id defaults to "ip:port" (consistent with memfabric_control_a/b). You can
+  override with --my-id if needed.
+- If you see ret=-2000 session not found, increase --transfer-wait-s and
+  --transfer-retries on the source node.
 
 vLLM startup (all pods use the same args)
 ----------------------------------------
