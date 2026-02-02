@@ -28,7 +28,7 @@ def parse_args():
 def main():
     args = parse_args()
     if args.bytes % (4096 * 4) != 0:
-        raise ValueError("bytes must be divisible by 4096 * sizeof(float32)")
+        raise ValueError("bytes must be divisible by 4096 * sizeof(int32)")
     cols = args.bytes // (4096 * 4)
     shape = (4096, cols)
 
@@ -49,7 +49,7 @@ def main():
     if ret != 0:
         raise RuntimeError("TransferEngine initialize failed")
 
-    tensor = torch.arange(1, shape[0] * shape[1] + 1, dtype=torch.float32, device="npu").reshape(shape)
+    tensor = torch.arange(1, shape[0] * shape[1] + 1, dtype=torch.int32, device="npu").reshape(shape)
     total_bytes = tensor.element_size() * tensor.numel()
     engine.register_memory(tensor.data_ptr(), total_bytes)
     torch.npu.synchronize()
@@ -76,6 +76,13 @@ def main():
                     if b_addr is None:
                         conn.sendall(b"ERR no B addr\n")
                         continue
+                    # notify B to start timing
+                    try:
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as nb:
+                            nb.connect((args.b_notify_ip, args.b_notify_port))
+                            nb.sendall(b"START\n")
+                    except Exception as e:
+                        print(f"[A] notify B start failed: {e}")
                     print("[A] send command received, start D2D transfer")
                     t0 = time.time()
                     ret = engine.transfer_sync_write(args.peer_id, tensor.data_ptr(), b_addr, total_bytes)
@@ -95,7 +102,7 @@ def main():
                         try:
                             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as nb:
                                 nb.connect((args.b_notify_ip, args.b_notify_port))
-                                nb.sendall(b"DONE\n")
+                                nb.sendall(f"DONE {ms:.3f}\n".encode("utf-8"))
                         except Exception as e:
                             print(f"[A] notify B failed: {e}")
                         conn.sendall(b"OK\n")
